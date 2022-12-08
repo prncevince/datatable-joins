@@ -1,0 +1,90 @@
+---
+title: A `data.table` Joins Comparison
+output:
+  html_document:
+    anchor_sections: true
+    code_folding: show
+    css: [assets/style.css]
+    df_print: default
+    mathjax: NULL
+    toc: true
+    toc_float:
+      collapsed: false
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+
+opts_chunk$set(message = FALSE)
+```
+
+```{r}
+library(data.table)
+library(dplyr, warn.conflicts = FALSE)
+```
+
+```{r}
+d1 <- data.table(x=rep(1,2), y=1:2, v=5:6)
+d2 <- data.table(w=rep(1,4), y=c(1:2,2,3), z=1:4)
+
+d1
+d2
+```
+
+```{r}
+setkey(d1, x, y)
+setkey(d2, w, y)
+```
+
+# `X[Y]` syntax
+
+- `X[Y]` is a join, looking up `X`'s rows using `Y` (or `Y`'s key(s) if it has one) as an index.
+- `Y[X]` is a join, looking up `Y`'s rows using `X` (or `X`'s key(s) if it has one) as an index.
+
+`merge.data.table` & `X[Y]` do different things.
+
+# Outer Join Syntax Equivalents - (X)()(Y)
+
+Here `X` = `d1` and `Y` = `d2`
+
+```{r}
+merge.data.table(d1, d2, all.x = T)[, x := NULL][]
+# left join d1 & d2 ----
+merge.data.table(d1, d2, by.x = c("x", "y"), by.y = c("w", "y"), all.x = T) |>
+  copy() |> setnames("x", "w") %>% `[`()
+# Y[X] syntax - output is equivalent 
+d2[d1]
+# `on = c()` syntax
+d2[d1, on = c("w" = "x", "y")]
+# dplyr - output is equivalent - key name from `x` is kept instead of `y`
+left_join(d1, d2, by = c("x" = "w", "y")) |> copy() |> setnames("x", "w") %>% `[`()
+```
+
+# Outer Join Syntax Equivalents - Reversed - (Y)()(X)
+
+Again, here `X` = `d1` and `Y` = `d2`. However, `Y` (`d2`) is our 'left' table.
+
+Notice here that we can't get the SAME results from `merge.data.table` on the 1st example when NOT specifying `by.x` & `by.y`.
+
+WHY is this?
+
+For our 1st example, you cannot do this & expect similar results to `X[Y]` syntax.
+There are 3 steps that `merge()` takes for joining on columns.
+The merge on set keys for `X[Y]` syntax is different logic than `merge()` - notice our `NA` value in the last row below!
+A value within the key within our `X` table (`d1$x`) is set to `NA`.
+
+The 2nd statement fixes this error by explicitly setting `by.x` & `by.y` columns.
+
+```{r}
+merge.data.table(d2, d1, all.x = T)[, w := NULL][]
+# left join d2 & d1 ----
+merge.data.table(d2, d1, by.x = c("w", "y"), by.y = c("x", "y"), all.x = T) |>
+  copy() |> setnames("w", "x") %>% `[`()
+# X[Y] syntax - output is equivalent
+d1[d2]
+# `on = c()` syntax
+d1[d2, on = c("x" = "w", "y")]
+# dplyr - output is equivalent - albeit key name from `x` is kept instead of `y`
+left_join(d2, d1, by = c("y", "w" = "x")) |> copy() |> setnames("w", "x") %>% `[`()
+```
+

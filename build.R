@@ -1,0 +1,1 @@
+rmarkdown::render("datatable-joins.Rmd", output_file = "docs/index.html")
